@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Jokshu",
-    "slug": "jokshu-voting-new", 
+    "slug": "jokshu-voting-new",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jnu.jokshuvoting2"
+      "bundleIdentifier": "com.jnu.jokshuvoting2",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,8 +30,11 @@
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -43,9 +49,12 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "866c3b95-ef37-4ef2-8dd8-f32421b2bcac" 
+        "projectId": "866c3b95-ef37-4ef2-8dd8-f32421b2bcac"
       }
     },
-    "owner": "shohan2929"
+    "owner": "shohan2929",
+    "updates": {
+      "url": "https://u.expo.dev/866c3b95-ef37-4ef2-8dd8-f32421b2bcac"
+    }
   }
 }
