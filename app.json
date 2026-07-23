@@ -46,12 +46,6 @@
         "projectId": "866c3b95-ef37-4ef2-8dd8-f32421b2bcac" 
       }
     },
-    "owner": "shohan2929",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/866c3b95-ef37-4ef2-8dd8-f32421b2bcac"
-    }
+    "owner": "shohan2929"
   }
 }

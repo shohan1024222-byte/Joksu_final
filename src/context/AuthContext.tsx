@@ -1,11 +1,34 @@
 ﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import { FirebaseStorage } from '../firebase';
 import { Student, AuthContextType } from '../types';
 import { STUDENTS, PASSWORDS } from '../data/mockData';
 
-// Firebase cloud storage - app uninstall korleo data thakbe
+const HASH_PREFIX = 'sha256:';
+
 const Storage = FirebaseStorage;
+
+const hashPassword = async (password: string): Promise<string> => {
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    password
+  );
+  return `${HASH_PREFIX}${digest}`;
+};
+
+const isHashedPassword = (value: string): boolean => value.startsWith(HASH_PREFIX);
+
+const verifyPassword = async (storedPassword: string, password: string): Promise<boolean> => {
+  if (isHashedPassword(storedPassword)) {
+    const hashedInput = await hashPassword(password);
+    return hashedInput === storedPassword;
+  }
+  return storedPassword === password;
+};
+
+// Firebase cloud storage - app uninstall korleo data thakbe
+// eslint-disable-next-line no-unused-vars
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -16,9 +39,11 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<Student | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [registeredStudentsCount, setRegisteredStudentsCount] = useState(0);
 
   useEffect(() => {
     loadUserFromStorage();
+    refreshRegisteredStudentsCount();
   }, []);
 
   const loadUserFromStorage = async () => {
@@ -36,23 +61,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (studentId: string, password: string): Promise<boolean> => {
     try {
-      console.log('Login attempt:', studentId, password);
-      console.log('Available passwords:', PASSWORDS);
-      console.log('Available students:', STUDENTS.map(s => s.studentId));
+      console.log('Login attempt:', studentId);
       
       // First check if there's a custom password for this user
       let storedPassword;
+      let customPasswords: Record<string, string> = {};
       try {
         const customPasswordsData = await Storage.getItem('customPasswords');
-        const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
+        customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
         storedPassword = customPasswords[studentId] || PASSWORDS[studentId];
       } catch (e) {
         storedPassword = PASSWORDS[studentId];
       }
-      
-      console.log('Found password for ID:', storedPassword);
-      
-      if (storedPassword && storedPassword === password) {
+
+      if (storedPassword && await verifyPassword(storedPassword, password)) {
+        if (customPasswords[studentId] && !isHashedPassword(customPasswords[studentId])) {
+          customPasswords[studentId] = await hashPassword(password);
+          await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
+        }
+
         // Check if there's a custom user data
         let foundStudent;
         try {
@@ -129,6 +156,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUserPhoneNumber = async (phoneNumber: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const updatedUser = { ...user, phoneNumber };
+      setUser(updatedUser);
+      await Storage.setItem('currentUser', JSON.stringify(updatedUser));
+
+      // Save custom user data so admin view and OTP flow can use latest number.
+      const customUsersData = await Storage.getItem('customUsers');
+      const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
+      const existingMock = STUDENTS.find(s => s.studentId === user.studentId);
+      const base = customUsers[user.studentId] || existingMock || updatedUser;
+      customUsers[user.studentId] = { ...base, ...updatedUser, phoneNumber };
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
+
+      return true;
+    } catch (error) {
+      console.error('Error updating phone number:', error);
+      return false;
+    }
+  };
+
   const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -138,12 +187,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
       storedPassword = customPasswords[user.studentId] || PASSWORDS[user.studentId];
 
-      if (storedPassword !== currentPassword) {
+      if (!storedPassword || !(await verifyPassword(storedPassword, currentPassword))) {
         return false;
       }
 
-      // Save new password
-      customPasswords[user.studentId] = newPassword;
+      // Save new hashed password
+      customPasswords[user.studentId] = await hashPassword(newPassword);
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
 
       return true;
@@ -153,7 +202,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const addStudent = async (studentId: string, name: string, password: string, department: string, session: string): Promise<boolean> => {
+  const updateStudentPassword = async (studentId: string, newPassword: string): Promise<boolean> => {
+    try {
+      const customPasswordsData = await Storage.getItem('customPasswords');
+      const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
+      customPasswords[studentId] = await hashPassword(newPassword);
+      await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
+      return true;
+    } catch (error) {
+      console.error('Error updating student password:', error);
+      return false;
+    }
+  };
+
+  const addStudent = async (studentId: string, name: string, password: string, department: string, session: string, phoneNumber: string = ''): Promise<boolean> => {
     try {
       // Check if student already exists
       const existingStudent = STUDENTS.find(s => s.studentId === studentId);
@@ -169,6 +231,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: `std_${Date.now()}`,
         studentId,
         name,
+        phoneNumber,
         department,
         session,
         hasVoted: false,
@@ -179,11 +242,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       customUsers[studentId] = newStudent;
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
-      // Save password
+      // Save hashed password
       const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-      customPasswords[studentId] = password;
+      customPasswords[studentId] = await hashPassword(password);
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
+      await refreshRegisteredStudentsCount();
 
       return true;
     } catch (error) {
@@ -192,13 +256,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const getRegisteredStudents = async (): Promise<Array<{ studentId: string; name: string; department: string; session: string }>> => {
+  const getRegisteredStudents = async (): Promise<Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }>> => {
     try {
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       
       // Combine mock students + custom students
-      const allStudents: Array<{ studentId: string; name: string; department: string; session: string }> = [];
+      const allStudents: Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }> = [];
       
       // Get removed students list
       const removedData = await Storage.getItem('removedStudents');
@@ -207,7 +271,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Add mock students (excluding admin and removed ones)
       STUDENTS.forEach(s => {
         if (s.studentId !== 'admin' && !removedStudents.includes(s.studentId)) {
-          allStudents.push({ studentId: s.studentId, name: s.name, department: s.department, session: s.session });
+          allStudents.push({ studentId: s.studentId, name: s.name, phoneNumber: (s as any).phoneNumber || '', department: s.department, session: s.session });
         }
       });
 
@@ -216,9 +280,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (s.studentId !== 'admin') {
           const existingIdx = allStudents.findIndex(x => x.studentId === s.studentId);
           if (existingIdx >= 0) {
-            allStudents[existingIdx] = { studentId: s.studentId, name: s.name, department: s.department, session: s.session };
+            allStudents[existingIdx] = { studentId: s.studentId, name: s.name, phoneNumber: s.phoneNumber || '', department: s.department, session: s.session };
           } else {
-            allStudents.push({ studentId: s.studentId, name: s.name, department: s.department, session: s.session });
+            allStudents.push({ studentId: s.studentId, name: s.name, phoneNumber: s.phoneNumber || '', department: s.department, session: s.session });
           }
         }
       });
@@ -227,6 +291,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error getting students:', error);
       return [];
+    }
+  };
+
+  const refreshRegisteredStudentsCount = async () => {
+    try {
+      const students = await getRegisteredStudents();
+      const nextCount = students.length;
+      setRegisteredStudentsCount(nextCount);
+      await Storage.setItem('registeredVotersCount', String(nextCount));
+    } catch (error) {
+      console.error('Error refreshing registered students count:', error);
     }
   };
 
@@ -243,6 +318,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
       delete customPasswords[studentId];
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
+      await refreshRegisteredStudentsCount();
 
       // Track removed mock students so they don't reappear
       const removedData = await Storage.getItem('removedStudents');
@@ -259,7 +335,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const updateStudent = async (studentId: string, name: string, department: string, session: string): Promise<boolean> => {
+  const updateStudent = async (studentId: string, name: string, department: string, session: string, phoneNumber: string = ''): Promise<boolean> => {
     try {
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
@@ -270,12 +346,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const base = existingCustom || existingMock;
 
       if (base) {
-        customUsers[studentId] = { ...base, name, department, session };
+        customUsers[studentId] = { ...base, name, department, session, phoneNumber };
       } else {
         customUsers[studentId] = {
           id: `std_${Date.now()}`,
           studentId,
           name,
+          phoneNumber,
           department,
           session,
           hasVoted: false,
@@ -284,6 +361,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
+      await refreshRegisteredStudentsCount();
       return true;
     } catch (error) {
       console.error('Error updating student:', error);
@@ -291,10 +369,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const isAdmin = user?.studentId === 'admin';
+  // Treat both the built-in 'admin' user and B210305051 as admin accounts
+  const isAdmin = user?.studentId === 'admin' || user?.studentId === 'B210305051';
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, login, logout, updateUserName, updatePassword, addStudent, getRegisteredStudents, removeStudent, updateStudent }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, registeredStudentsCount, login, logout, updateUserName, updateUserPhoneNumber, updatePassword, updateStudentPassword, addStudent, getRegisteredStudents, removeStudent, updateStudent }}>
       {children}
     </AuthContext.Provider>
   );

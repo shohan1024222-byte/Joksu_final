@@ -4,6 +4,7 @@ export interface Student {
   id: string;
   studentId: string;
   name: string;
+  phoneNumber?: string;
   department: string;
   session: string;
   hasVoted: boolean;
@@ -67,25 +68,75 @@ export interface ElectionState {
   votedCount: number;
 }
 
+export interface FingerprintTemplate {
+  code: string;
+  updatedAt: string;
+}
+
+export interface FaceTemplate {
+  code: string;
+  updatedAt: string;
+}
+
+export type VoteOtpRequestStatus = 'pending' | 'approved' | 'sent' | 'verified' | 'rejected' | 'expired';
+
+export interface VoteOtpRequest {
+  studentId: string;
+  phoneNumber: string;
+  status: VoteOtpRequestStatus;
+  requestedAt: string;
+  approvedAt?: string;
+  sentAt?: string;
+  verifiedAt?: string;
+  expiresAt?: string;
+  otpCode?: string;
+  attemptsLeft?: number;
+  note?: string;
+}
+
 // Context Types
 export interface AuthContextType {
   user: Student | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  registeredStudentsCount: number;
   login: (studentId: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUserName: (newName: string) => Promise<boolean>;
+  updateUserPhoneNumber: (phoneNumber: string) => Promise<boolean>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
-  addStudent: (studentId: string, name: string, password: string, department: string, session: string) => Promise<boolean>;
-  getRegisteredStudents: () => Promise<Array<{ studentId: string; name: string; department: string; session: string }>>;
+  updateStudentPassword: (studentId: string, newPassword: string) => Promise<boolean>;
+  addStudent: (studentId: string, name: string, password: string, department: string, session: string, phoneNumber?: string) => Promise<boolean>;
+  getRegisteredStudents: () => Promise<Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }>>;
   removeStudent: (studentId: string) => Promise<boolean>;
-  updateStudent: (studentId: string, name: string, department: string, session: string) => Promise<boolean>;
+  updateStudent: (studentId: string, name: string, department: string, session: string, phoneNumber?: string) => Promise<boolean>;
 }
 
 export interface VotingContextType {
   candidates: Candidate[];
   positions: PositionInfo[];
   electionState: ElectionState;
+  otpRequired: boolean;
+  otpRequests: VoteOtpRequest[];
+  setOtpRequired: (required: boolean) => Promise<boolean>;
+  requestVoteOtp: (studentId: string, phoneNumber: string) => Promise<boolean>;
+  verifyVoteOtp: (studentId: string, otpCode: string) => Promise<boolean>;
+  isOtpVerified: (studentId: string) => boolean;
+  getVoteOtpRequest: (studentId: string) => VoteOtpRequest | null;
+  approveVoteOtpRequest: (studentId: string) => Promise<string | null>;
+  markVoteOtpAsSent: (studentId: string) => Promise<boolean>;
+  rejectVoteOtpRequest: (studentId: string, note?: string) => Promise<boolean>;
+  clearVoteOtpRequest: (studentId: string) => Promise<boolean>;
+  faceRequired: boolean;
+  setFaceRequired: (required: boolean) => Promise<boolean>;
+  setStudentFace: (studentId: string, faceCode: string) => Promise<boolean>;
+  clearStudentFace: (studentId: string) => Promise<boolean>;
+  verifyStudentFace: (studentId: string, faceCode: string) => Promise<boolean>;
+  isFaceVerified: (studentId: string) => boolean;
+  getFaceEnrollmentStatus: (studentIds: string[]) => Promise<Record<string, boolean>>;
+
+  // Backward-compatible fingerprint API
+  fingerprintRequired: boolean;
   castVote: (candidateId: string, position: Position) => Promise<boolean>;
   getResults: () => Map<Position, Candidate[]>;
   hasVotedForPosition: (position: Position) => boolean;
@@ -94,4 +145,11 @@ export interface VotingContextType {
   deleteCandidate: (candidateId: string) => Promise<boolean>;
   verifyStudentId: (scannedId: string, expectedId: string) => Promise<boolean>;
   isIdVerified: (studentId: string) => boolean;
+  resetSecurityVerification: (studentId: string) => void;
+  setFingerprintRequired: (required: boolean) => Promise<boolean>;
+  setStudentFingerprint: (studentId: string, fingerprintCode: string) => Promise<boolean>;
+  clearStudentFingerprint: (studentId: string) => Promise<boolean>;
+  verifyStudentFingerprint: (studentId: string, fingerprintCode: string) => Promise<boolean>;
+  isFingerprintVerified: (studentId: string) => boolean;
+  getFingerprintEnrollmentStatus: (studentIds: string[]) => Promise<Record<string, boolean>>;
 }

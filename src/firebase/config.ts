@@ -16,8 +16,8 @@
 //
 // ============================================================
 
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 // ⚠️ নিচের values গুলো Firebase Console থেকে তোমার নিজের project-এর values দিয়ে replace করো
 const firebaseConfig = {
@@ -29,10 +29,17 @@ const firebaseConfig = {
   appId: "1:617567740978:web:b3b590ab05b616826d082b"
 };
 
-// Firebase initialize
-const app = initializeApp(firebaseConfig);
+// Firebase initialize - safely wrapped in try/catch
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
 
-// Firestore database instance
-export const db = getFirestore(app);
+try {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  console.log('Firebase initialized successfully');
+} catch (error) {
+  console.warn('Firebase initialization failed, falling back to local storage:', error);
+}
 
+export { db };
 export default app;

@@ -29,6 +29,31 @@ This is an optimized version for expo.dev deployment and APK generation.
 
 ## 🚀 Building for Production
 
+## 📱 Expo Go-তে QR scan করলে app load না হলে
+
+এই project-এ code/config issue detect হয়নি (`expo-doctor` pass, Android bundle success)। সমস্যা network mode-এ ছিল: `--tunnel` চালালে `ngrok tunnel took too long to connect` error আসতে পারে।
+
+### Quick Fix (Recommended)
+
+```bash
+npm run start:lan:clear
+```
+
+তারপর Expo Go দিয়ে নতুন QR code scan করুন।
+
+### Checklist
+
+1. Phone-এর Expo Go app update করুন (latest version)
+2. Mobile data off করে Wi-Fi on রাখুন (stable network)
+3. VPN/Proxy বন্ধ রাখুন
+4. Phone এবং PC একই Wi-Fi-তে আছে কিনা নিশ্চিত করুন
+5. VPN/Proxy/Hotspot isolation বন্ধ রাখুন
+6. দরকার হলে tunnel fallback:
+
+```bash
+npx expo start --tunnel --clear
+```
+
 ### Prerequisites for APK Build
 
 1. Install EAS CLI:

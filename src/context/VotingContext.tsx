@@ -1,8 +1,8 @@
 ﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseStorage } from '../firebase';
-import { Candidate, Position, PositionInfo, ElectionState, VotingContextType } from '../types';
+import { Candidate, Position, PositionInfo, ElectionState, VotingContextType, FaceTemplate, VoteOtpRequest } from '../types';
 import { CANDIDATES, POSITIONS } from '../data/mockData';
+import { isCameraFaceMatch, isCameraFaceTemplate } from '../utils/faceCamera';
 import { useAuth } from './AuthContext';
 
 // Firebase cloud storage ব্যবহার করা হচ্ছে - app uninstall করলেও data থাকবে
@@ -16,23 +16,76 @@ interface VotingProviderProps {
 
 // Increment this version whenever CANDIDATES data in mockData.ts is updated
 const CANDIDATES_DATA_VERSION = '6';
+const OTP_REQUESTS_KEY = 'manualVoteOtpRequests';
+const OTP_LENGTH = 6;
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
 export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, registeredStudentsCount } = useAuth();
   const [candidates, setCandidates] = useState<Candidate[]>(CANDIDATES);
   const [positions] = useState<PositionInfo[]>(POSITIONS);
+  const [faceRequired, setFaceRequiredState] = useState(false);
+  const [otpRequired, setOtpRequiredState] = useState(false);
+  const [faceTemplates, setFaceTemplates] = useState<Record<string, FaceTemplate>>({});
+  const [otpRequests, setOtpRequests] = useState<VoteOtpRequest[]>([]);
   const [electionState, setElectionState] = useState<ElectionState>({
     isActive: true,
     startTime: new Date('2026-02-10T08:00:00'),
     endTime: new Date('2026-02-10T18:00:00'),
-    totalVoters: 5000,
+    totalVoters: 0,
     votedCount: 0,
   });
 
   useEffect(() => {
     loadCandidatesFromStorage();
     loadElectionState();
+    loadFaceData();
+    loadOtpSettings();
+    loadOtpRequests();
   }, []);
+
+  useEffect(() => {
+    if (registeredStudentsCount > 0) {
+      setElectionState(prev => {
+        if (prev.totalVoters === registeredStudentsCount) return prev;
+        const nextState = { ...prev, totalVoters: registeredStudentsCount };
+        void Storage.setItem('electionState', JSON.stringify(nextState));
+        return nextState;
+      });
+    }
+  }, [registeredStudentsCount]);
+
+  useEffect(() => {
+    // New login/session should not reuse previous OTP verification state.
+    setVerifiedOtps(new Set());
+  }, [user?.studentId]);
+
+  const normalizeStudentId = (studentId: string): string => studentId.slice(-9);
+
+  const findStoredFace = (studentId: string): FaceTemplate | null => {
+    const direct = faceTemplates[studentId];
+    if (direct) return direct;
+
+    const targetLast9 = normalizeStudentId(studentId);
+    for (const [storedId, template] of Object.entries(faceTemplates)) {
+      if (normalizeStudentId(storedId) === targetLast9) {
+        return template;
+      }
+    }
+    return null;
+  };
+
+  const resolveStoredFaceKey = (studentId: string): string | null => {
+    if (faceTemplates[studentId]) return studentId;
+    const targetLast9 = normalizeStudentId(studentId);
+    for (const storedId of Object.keys(faceTemplates)) {
+      if (normalizeStudentId(storedId) === targetLast9) {
+        return storedId;
+      }
+    }
+    return null;
+  };
 
   const loadCandidatesFromStorage = async () => {
     try {
@@ -62,6 +115,86 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error loading election state:', error);
     }
+  };
+
+  const loadFaceData = async () => {
+    try {
+      // Migrate from old fingerprint keys if face keys are empty.
+      const requiredRaw = await Storage.getItem('faceRequired');
+      const fallbackRequiredRaw = await Storage.getItem('fingerprintRequired');
+      const resolvedRequired = requiredRaw ?? fallbackRequiredRaw;
+      setFaceRequiredState(resolvedRequired === 'true');
+
+      const templatesRaw = await Storage.getItem('faceTemplates');
+      const fallbackTemplatesRaw = await Storage.getItem('fingerprintTemplates');
+      const resolvedTemplatesRaw = templatesRaw ?? fallbackTemplatesRaw;
+      const templates = resolvedTemplatesRaw ? JSON.parse(resolvedTemplatesRaw) : {};
+      setFaceTemplates(templates);
+
+      if (!requiredRaw && fallbackRequiredRaw) {
+        await Storage.setItem('faceRequired', fallbackRequiredRaw);
+      }
+
+      if (!templatesRaw && fallbackTemplatesRaw) {
+        await Storage.setItem('faceTemplates', fallbackTemplatesRaw);
+      }
+    } catch (error) {
+      console.error('Error loading face data:', error);
+    }
+  };
+
+  const loadOtpSettings = async () => {
+    try {
+      const requiredRaw = await Storage.getItem('otpRequired');
+      setOtpRequiredState(requiredRaw === 'true');
+    } catch (error) {
+      console.error('Error loading OTP settings:', error);
+    }
+  };
+
+  const loadOtpRequests = async () => {
+    try {
+      const raw = await Storage.getItem(OTP_REQUESTS_KEY);
+      if (!raw) {
+        setOtpRequests([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setOtpRequests(parsed as VoteOtpRequest[]);
+      } else {
+        setOtpRequests([]);
+      }
+    } catch (error) {
+      console.error('Error loading OTP requests:', error);
+      setOtpRequests([]);
+    }
+  };
+
+  const saveOtpRequests = async (nextRequests: VoteOtpRequest[]): Promise<void> => {
+    setOtpRequests(nextRequests);
+    await Storage.setItem(OTP_REQUESTS_KEY, JSON.stringify(nextRequests));
+  };
+
+  const normalizeWithFallback = (studentId: string): string => normalizeStudentId(studentId);
+
+  const findOtpRequest = (studentId: string): VoteOtpRequest | null => {
+    const target = normalizeWithFallback(studentId);
+    const request = otpRequests.find((item) => normalizeWithFallback(item.studentId) === target);
+    return request || null;
+  };
+
+  const upsertOtpRequest = async (request: VoteOtpRequest): Promise<void> => {
+    const target = normalizeWithFallback(request.studentId);
+    const nextRequests = otpRequests.filter((item) => normalizeWithFallback(item.studentId) !== target);
+    nextRequests.push(request);
+    await saveOtpRequests(nextRequests);
+  };
+
+  const generateOtpCode = (): string => {
+    const min = 10 ** (OTP_LENGTH - 1);
+    const max = (10 ** OTP_LENGTH) - 1;
+    return String(Math.floor(min + Math.random() * (max - min + 1)));
   };
 
   const saveCandidates = async (updatedCandidates: Candidate[]) => {
@@ -115,6 +248,8 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   // Track ID verification for voting
   const [verifiedVoters, setVerifiedVoters] = useState<Set<string>>(new Set());
+  const [verifiedFaces, setVerifiedFaces] = useState<Set<string>>(new Set());
+  const [verifiedOtps, setVerifiedOtps] = useState<Set<string>>(new Set());
 
   // Check if user has verified their ID for voting
   const isIdVerified = (studentId: string): boolean => {
@@ -130,6 +265,345 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
     
     return false;
   };
+
+  const isFaceVerified = (studentId: string): boolean => {
+    const last9 = normalizeStudentId(studentId);
+    for (const verifiedId of verifiedFaces) {
+      if (normalizeStudentId(verifiedId) === last9) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const isOtpVerified = (studentId: string): boolean => {
+    const last9 = normalizeStudentId(studentId);
+    for (const verifiedId of verifiedOtps) {
+      if (normalizeStudentId(verifiedId) === last9) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const resetSecurityVerification = (studentId: string): void => {
+    const target = normalizeStudentId(studentId);
+
+    setVerifiedVoters(prev => {
+      const next = new Set(prev);
+      for (const id of Array.from(next)) {
+        if (normalizeStudentId(id) === target) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+
+    setVerifiedFaces(prev => {
+      const next = new Set(prev);
+      for (const id of Array.from(next)) {
+        if (normalizeStudentId(id) === target) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+
+    setVerifiedOtps(prev => {
+      const next = new Set(prev);
+      for (const id of Array.from(next)) {
+        if (normalizeStudentId(id) === target) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const setOtpRequired = async (required: boolean): Promise<boolean> => {
+    try {
+      setOtpRequiredState(required);
+      await Storage.setItem('otpRequired', required ? 'true' : 'false');
+      if (!required) {
+        setVerifiedOtps(new Set());
+      }
+      return true;
+    } catch (error) {
+      console.error('Error updating otp requirement:', error);
+      return false;
+    }
+  };
+
+  const requestVoteOtp = async (studentId: string, phoneNumber: string): Promise<boolean> => {
+    try {
+      const trimmedPhone = phoneNumber.trim();
+      if (!trimmedPhone) return false;
+
+      const now = new Date().toISOString();
+      const current = findOtpRequest(studentId);
+      const nextRequest: VoteOtpRequest = {
+        studentId,
+        phoneNumber: trimmedPhone,
+        status: 'pending',
+        requestedAt: now,
+        note: current?.note,
+      };
+
+      await upsertOtpRequest(nextRequest);
+      setVerifiedOtps(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+      return true;
+    } catch (error) {
+      console.error('Error requesting vote OTP:', error);
+      return false;
+    }
+  };
+
+  const verifyVoteOtp = async (studentId: string, otpCode: string): Promise<boolean> => {
+    try {
+      const request = findOtpRequest(studentId);
+      if (!request || !request.otpCode) return false;
+      if (request.status !== 'approved' && request.status !== 'sent') return false;
+
+      const nowMs = Date.now();
+      const expiresAtMs = request.expiresAt ? new Date(request.expiresAt).getTime() : 0;
+      if (!expiresAtMs || Number.isNaN(expiresAtMs) || nowMs > expiresAtMs) {
+        await upsertOtpRequest({
+          ...request,
+          status: 'expired',
+          otpCode: undefined,
+          note: 'OTP expired',
+        });
+        return false;
+      }
+
+      const attemptsLeft = request.attemptsLeft ?? OTP_MAX_ATTEMPTS;
+      const normalizedInput = otpCode.trim();
+      if (normalizedInput !== request.otpCode) {
+        const nextAttempts = attemptsLeft - 1;
+        await upsertOtpRequest({
+          ...request,
+          attemptsLeft: nextAttempts,
+          status: nextAttempts <= 0 ? 'rejected' : request.status,
+          note: nextAttempts <= 0 ? 'Maximum attempts exceeded' : request.note,
+        });
+        return false;
+      }
+
+      await upsertOtpRequest({
+        ...request,
+        status: 'verified',
+        verifiedAt: new Date().toISOString(),
+        otpCode: undefined,
+        attemptsLeft: undefined,
+      });
+
+      setVerifiedOtps(prev => {
+        const next = new Set(prev);
+        next.add(studentId);
+        return next;
+      });
+      return true;
+    } catch (error) {
+      console.error('Error verifying vote OTP:', error);
+      return false;
+    }
+  };
+
+  const getVoteOtpRequest = (studentId: string): VoteOtpRequest | null => {
+    return findOtpRequest(studentId);
+  };
+
+  const approveVoteOtpRequest = async (studentId: string): Promise<string | null> => {
+    try {
+      const request = findOtpRequest(studentId);
+      if (!request) return null;
+
+      const otpCode = generateOtpCode();
+      const approvedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
+
+      await upsertOtpRequest({
+        ...request,
+        status: 'approved',
+        otpCode,
+        approvedAt,
+        expiresAt,
+        attemptsLeft: OTP_MAX_ATTEMPTS,
+        note: undefined,
+      });
+
+      setVerifiedOtps(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+
+      return otpCode;
+    } catch (error) {
+      console.error('Error approving OTP request:', error);
+      return null;
+    }
+  };
+
+  const markVoteOtpAsSent = async (studentId: string): Promise<boolean> => {
+    try {
+      const request = findOtpRequest(studentId);
+      if (!request || !request.otpCode) return false;
+
+      await upsertOtpRequest({
+        ...request,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+      });
+      return true;
+    } catch (error) {
+      console.error('Error marking OTP as sent:', error);
+      return false;
+    }
+  };
+
+  const rejectVoteOtpRequest = async (studentId: string, note: string = 'Rejected by admin'): Promise<boolean> => {
+    try {
+      const request = findOtpRequest(studentId);
+      if (!request) return false;
+
+      await upsertOtpRequest({
+        ...request,
+        status: 'rejected',
+        otpCode: undefined,
+        attemptsLeft: undefined,
+        note,
+      });
+
+      setVerifiedOtps(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+      return true;
+    } catch (error) {
+      console.error('Error rejecting OTP request:', error);
+      return false;
+    }
+  };
+
+  const clearVoteOtpRequest = async (studentId: string): Promise<boolean> => {
+    try {
+      const target = normalizeWithFallback(studentId);
+      const nextRequests = otpRequests.filter((item) => normalizeWithFallback(item.studentId) !== target);
+      await saveOtpRequests(nextRequests);
+      return true;
+    } catch (error) {
+      console.error('Error clearing OTP request:', error);
+      return false;
+    }
+  };
+
+  const setFaceRequired = async (required: boolean): Promise<boolean> => {
+    try {
+      setFaceRequiredState(required);
+      await Storage.setItem('faceRequired', required ? 'true' : 'false');
+      await Storage.setItem('fingerprintRequired', required ? 'true' : 'false');
+      if (!required) {
+        setVerifiedFaces(new Set());
+      }
+      return true;
+    } catch (error) {
+      console.error('Error updating face requirement:', error);
+      return false;
+    }
+  };
+
+  const setStudentFace = async (studentId: string, faceCode: string): Promise<boolean> => {
+    const cleanCode = faceCode.trim();
+    if (!cleanCode) return false;
+
+    try {
+      const updatedTemplates = {
+        ...faceTemplates,
+        [studentId]: {
+          code: cleanCode,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      setFaceTemplates(updatedTemplates);
+      await Storage.setItem('faceTemplates', JSON.stringify(updatedTemplates));
+      await Storage.setItem('fingerprintTemplates', JSON.stringify(updatedTemplates));
+      return true;
+    } catch (error) {
+      console.error('Error saving face template:', error);
+      return false;
+    }
+  };
+
+  const clearStudentFace = async (studentId: string): Promise<boolean> => {
+    try {
+      const key = resolveStoredFaceKey(studentId);
+      if (!key) return true;
+
+      const updatedTemplates = { ...faceTemplates };
+      delete updatedTemplates[key];
+
+      setFaceTemplates(updatedTemplates);
+      await Storage.setItem('faceTemplates', JSON.stringify(updatedTemplates));
+      await Storage.setItem('fingerprintTemplates', JSON.stringify(updatedTemplates));
+
+      setVerifiedFaces(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        next.delete(key);
+        return next;
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error clearing face template:', error);
+      return false;
+    }
+  };
+
+  const verifyStudentFace = async (studentId: string, faceCode: string): Promise<boolean> => {
+    if (!faceRequired) return true;
+
+    const template = findStoredFace(studentId);
+    if (!template) return false;
+
+    const incomingCode = faceCode.trim();
+    const isMatch = isCameraFaceTemplate(template.code)
+      ? isCameraFaceMatch(template.code, incomingCode)
+      : template.code === incomingCode;
+
+    if (isMatch) {
+      setVerifiedFaces(prev => {
+        const next = new Set(prev);
+        next.add(studentId);
+        return next;
+      });
+    }
+
+    return isMatch;
+  };
+
+  const getFaceEnrollmentStatus = async (studentIds: string[]): Promise<Record<string, boolean>> => {
+    const status: Record<string, boolean> = {};
+    studentIds.forEach((studentId) => {
+      status[studentId] = !!findStoredFace(studentId);
+    });
+    return status;
+  };
+
+  // Backward-compatible aliases
+  const setFingerprintRequired = setFaceRequired;
+  const setStudentFingerprint = setStudentFace;
+  const clearStudentFingerprint = clearStudentFace;
+  const verifyStudentFingerprint = verifyStudentFace;
+  const isFingerprintVerified = isFaceVerified;
+  const getFingerprintEnrollmentStatus = getFaceEnrollmentStatus;
+  const fingerprintRequired = faceRequired;
 
   // Verify student ID for voting - just checks if ID matches, allows entry anytime
   const verifyStudentId = async (scannedId: string, expectedId: string): Promise<boolean> => {
@@ -170,6 +644,16 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       // Check if user ID is verified
       if (!isIdVerified(user.studentId)) {
         console.error('User ID not verified for voting');
+        return false;
+      }
+
+      if (faceRequired && !isFaceVerified(user.studentId)) {
+        console.error('User face not verified for voting');
+        return false;
+      }
+
+      if (otpRequired && !isOtpVerified(user.studentId)) {
+        console.error('User OTP not verified for voting');
         return false;
       }
 
@@ -220,13 +704,24 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       };
       await Storage.setItem('globalVotingRecord', JSON.stringify(votingRecord));
 
-      // If user has completed all voting, remove from verified list
+      // If user has completed all voting, clear session verifications and OTP request state.
       if (votingData.hasVoted) {
         setVerifiedVoters(prev => {
           const newSet = new Set(prev);
           newSet.delete(user.studentId);
           return newSet;
         });
+        setVerifiedFaces(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(user.studentId);
+          return newSet;
+        });
+        setVerifiedOtps(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(user.studentId);
+          return newSet;
+        });
+        await clearVoteOtpRequest(user.studentId);
       }
 
       // Update election state
@@ -268,6 +763,25 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
         candidates,
         positions,
         electionState,
+        otpRequired,
+        otpRequests,
+        setOtpRequired,
+        requestVoteOtp,
+        verifyVoteOtp,
+        isOtpVerified,
+        getVoteOtpRequest,
+        approveVoteOtpRequest,
+        markVoteOtpAsSent,
+        rejectVoteOtpRequest,
+        clearVoteOtpRequest,
+        faceRequired,
+        setFaceRequired,
+        setStudentFace,
+        clearStudentFace,
+        verifyStudentFace,
+        isFaceVerified,
+        getFaceEnrollmentStatus,
+        fingerprintRequired,
         castVote,
         getResults,
         hasVotedForPosition,
@@ -276,6 +790,13 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
         deleteCandidate,
         verifyStudentId,
         isIdVerified,
+        resetSecurityVerification,
+        setFingerprintRequired,
+        setStudentFingerprint,
+        clearStudentFingerprint,
+        verifyStudentFingerprint,
+        isFingerprintVerified,
+        getFingerprintEnrollmentStatus,
       }}
     >
       {children}

@@ -9,11 +9,15 @@ import {
   Alert,
   Modal,
   Platform,
+  Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth, useVoting } from '../context';
 import { IDCardScanner } from '../components/IDCardScanner';
+import { Colors, BorderRadius, Spacing } from '../theme';
 
-// Cross-platform alert
+const { width } = Dimensions.get('window');
+
 const showAlert = (title: string, message: string, buttons?: any[]) => {
   if (Platform.OS === 'web') {
     if (buttons && buttons.length > 1) {
@@ -27,22 +31,22 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
   }
 };
 
-type SettingsAction = 'changeName' | 'changePassword' | null;
+type SettingsAction = 'changeName' | 'changePassword' | 'changePhone' | null;
 
 export const ProfileScreen: React.FC = () => {
-  const { user, logout, isAdmin, updateUserName, updatePassword } = useAuth();
+  const { user, logout, isAdmin, updateUserName, updateUserPhoneNumber, updatePassword } = useAuth();
   const { positions, verifyStudentId } = useVoting();
 
-  // ID scan verification
   const [showScanner, setShowScanner] = useState(false);
   const [pendingAction, setPendingAction] = useState<SettingsAction>(null);
   const [isVerified, setIsVerified] = useState(false);
 
-  // Change name
   const [showNameModal, setShowNameModal] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // Change password
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -59,7 +63,6 @@ export const ProfileScreen: React.FC = () => {
     );
   };
 
-  // Start action — requires ID scan first
   const startAction = (action: SettingsAction) => {
     setPendingAction(action);
     setIsVerified(false);
@@ -75,6 +78,9 @@ export const ProfileScreen: React.FC = () => {
         if (pendingAction === 'changeName') {
           setNewName(user?.name || '');
           setShowNameModal(true);
+        } else if (pendingAction === 'changePhone') {
+          setNewPhoneNumber(user?.phoneNumber || '');
+          setShowPhoneModal(true);
         } else if (pendingAction === 'changePassword') {
           setCurrentPassword('');
           setNewPassword('');
@@ -82,7 +88,7 @@ export const ProfileScreen: React.FC = () => {
           setShowPasswordModal(true);
         }
       } else {
-        showAlert('যাচাইকরণ ব্যর্থ', 'আইডি কার্ড যাচাই করা যায়নি। আপনার নিজের আইডি কার্ড স্ক্যান করুন।');
+        showAlert('যাচাইকরণ ব্যর্থ', 'আইডি কার্ড যাচাই করা যায়নি।');
       }
     } catch (error) {
       showAlert('ত্রুটি', 'আইডি যাচাইকরণে সমস্যা হয়েছে।');
@@ -92,14 +98,8 @@ export const ProfileScreen: React.FC = () => {
 
   const handleNameChange = async () => {
     const trimmed = newName.trim();
-    if (!trimmed) {
-      showAlert('ত্রুটি', 'নাম খালি রাখা যাবে না');
-      return;
-    }
-    if (trimmed.length < 2) {
-      showAlert('ত্রুটি', 'নাম কমপক্ষে ২ অক্ষরের হতে হবে');
-      return;
-    }
+    if (!trimmed) return showAlert('ত্রুটি', 'নাম খালি রাখা যাবে না');
+    if (trimmed.length < 2) return showAlert('ত্রুটি', 'নাম কমপক্ষে ২ অক্ষরের হতে হবে');
     const success = await updateUserName(trimmed);
     if (success) {
       setShowNameModal(false);
@@ -111,34 +111,33 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handlePasswordChange = async () => {
-    if (!currentPassword.trim()) {
-      showAlert('ত্রুটি', 'বর্তমান পাসওয়ার্ড দিন');
-      return;
-    }
-    if (!newPassword.trim()) {
-      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড দিন');
-      return;
-    }
-    if (newPassword.length < 4) {
-      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড মিলছে না। আবার চেষ্টা করুন।');
-      return;
-    }
+    if (!currentPassword.trim()) return showAlert('ত্রুটি', 'বর্তমান পাসওয়ার্ড দিন');
+    if (!newPassword.trim()) return showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড দিন');
+    if (newPassword.length < 4) return showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে');
+    if (newPassword !== confirmPassword) return showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড মিলছে না।');
     const success = await updatePassword(currentPassword, newPassword);
     if (success) {
       setShowPasswordModal(false);
       setIsVerified(false);
-      showAlert('সফল! ✅', 'আপনার পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।');
+      showAlert('সফল! ✅', 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।');
     } else {
-      showAlert('ব্যর্থ', 'বর্তমান পাসওয়ার্ড ভুল দিয়েছেন।');
+      showAlert('ব্যর্থ', 'বর্তমান পাসওয়ার্ড ভুল।');
     }
   };
 
-  const handleViewVotingHistory = () => {
-    showAlert('Info', 'ভোটিং হিস্টরির ফিচার শীঘ্রই আসছে');
+  const handlePhoneNumberChange = async () => {
+    const trimmedPhone = newPhoneNumber.trim();
+    if (!trimmedPhone) return showAlert('ত্রুটি', 'Phone number খালি রাখা যাবে না');
+    if (trimmedPhone.length < 10) return showAlert('ত্রুটি', 'সঠিক phone number দিন');
+
+    const success = await updateUserPhoneNumber(trimmedPhone);
+    if (success) {
+      setShowPhoneModal(false);
+      setIsVerified(false);
+      showAlert('সফল! ✅', 'আপনার phone number সফলভাবে আপডেট হয়েছে। এখন admin এই নম্বরে OTP পাঠাতে পারবে।');
+    } else {
+      showAlert('ব্যর্থ', 'Phone number আপডেট করতে সমস্যা হয়েছে।');
+    }
   };
 
   if (!user) {
@@ -149,97 +148,112 @@ export const ProfileScreen: React.FC = () => {
     );
   }
 
+  const votedCount = user.votedPositions?.length || 0;
+  const totalPositions = positions.length;
+  const votingPercent = totalPositions > 0 ? Math.round((votedCount / totalPositions) * 100) : 0;
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Profile Header */}
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
+      <LinearGradient
+        colors={Colors.gradients.dark}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.headerDecor1} />
+        <View style={styles.headerDecor2} />
+
+        <LinearGradient
+          colors={isAdmin ? Colors.gradients.purple : Colors.gradients.aurora}
+          style={styles.avatarGradient}
+        >
           <Text style={styles.avatarText}>
             {user.name.charAt(0).toUpperCase()}
           </Text>
-        </View>
+        </LinearGradient>
         <Text style={styles.userName}>{user.name}</Text>
         <Text style={styles.userRole}>
           {isAdmin ? 'অ্যাডমিনিস্ট্রেটর' : 'ছাত্র/ছাত্রী'}
         </Text>
         {isAdmin && (
-          <View style={styles.adminBadge}>
-            <Text style={styles.adminBadgeText}>ADMIN</Text>
-          </View>
+          <LinearGradient
+            colors={Colors.gradients.gold}
+            style={styles.adminBadge}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Text style={styles.adminBadgeText}>⭐ ADMIN</Text>
+          </LinearGradient>
         )}
-      </View>
+      </LinearGradient>
 
       {/* User Information */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>ব্যক্তিগত তথ্য</Text>
-        
+        <Text style={styles.sectionTitle}>👤 ব্যক্তিগত তথ্য</Text>
         <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>নাম:</Text>
-            <Text style={styles.infoValue}>{user.name}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Student ID:</Text>
-            <Text style={styles.infoValue}>{user.studentId}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>বিভাগ:</Text>
-            <Text style={styles.infoValue}>{user.department}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>সেশন:</Text>
-            <Text style={styles.infoValue}>{user.session}</Text>
-          </View>
+          {[
+            { icon: '📛', label: 'নাম', value: user.name },
+            { icon: '🎓', label: 'Student ID', value: user.studentId },
+            { icon: '🏛️', label: 'বিভাগ', value: user.department },
+            { icon: '📅', label: 'সেশন', value: user.session },
+          ].map((item, idx) => (
+            <View key={idx} style={[styles.infoRow, idx < 3 && styles.infoRowBorder]}>
+              <View style={styles.infoLabelRow}>
+                <Text style={styles.infoIcon}>{item.icon}</Text>
+                <Text style={styles.infoLabel}>{item.label}</Text>
+              </View>
+              <Text style={styles.infoValue}>{item.value}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
       {/* Voting Status */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>ভোটিং স্ট্যাটাস</Text>
-        
+        <Text style={styles.sectionTitle}>🗳️ ভোটিং স্ট্যাটাস</Text>
         <View style={styles.votingCard}>
           <View style={styles.votingHeader}>
             <Text style={styles.votingTitle}>
               {user.hasVoted ? 'ভোট সম্পন্ন হয়েছে' : 'ভোট বাকি আছে'}
             </Text>
-            <View style={[
-              styles.votingStatus,
-              user.hasVoted ? styles.votedStatus : styles.pendingStatus
-            ]}>
+            <LinearGradient
+              colors={user.hasVoted ? Colors.gradients.success : Colors.gradients.warning}
+              style={styles.votingStatusBadge}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
               <Text style={styles.votingStatusText}>
                 {user.hasVoted ? '✓ সম্পন্ন' : '⏳ বাকি'}
               </Text>
-            </View>
+            </LinearGradient>
           </View>
-          
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressLabel}>
-              ভোট প্রদান: {user.votedPositions?.length || 0} / {positions.length}
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill, 
-                  { 
-                    width: `${((user.votedPositions?.length || 0) / positions.length) * 100}%`
-                  }
-                ]} 
+
+          <View style={styles.progressSection}>
+            <View style={styles.progressRow}>
+              <Text style={styles.progressLabel}>ভোট প্রদান: {votedCount} / {totalPositions}</Text>
+              <Text style={styles.progressPercent}>{votingPercent}%</Text>
+            </View>
+            <View style={styles.progressBarBg}>
+              <LinearGradient
+                colors={Colors.gradients.success}
+                style={[styles.progressBarFill, { width: `${Math.max(votingPercent, 2)}%` }]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
               />
             </View>
           </View>
-          
+
           {user.votedPositions && user.votedPositions.length > 0 && (
-            <View style={styles.votedPositions}>
+            <View style={styles.votedPositionsSection}>
               <Text style={styles.votedPositionsTitle}>ভোট দেওয়া পদসমূহ:</Text>
               {user.votedPositions.map((positionId) => {
                 const position = positions.find(p => p.id === positionId);
                 return (
-                  <Text key={positionId} style={styles.votedPosition}>
-                    • {position?.titleBn}
-                  </Text>
+                  <View key={positionId} style={styles.votedPositionItem}>
+                    <Text style={styles.votedCheckmark}>✅</Text>
+                    <Text style={styles.votedPositionText}>{position?.titleBn}</Text>
+                  </View>
                 );
               })}
             </View>
@@ -249,41 +263,64 @@ export const ProfileScreen: React.FC = () => {
 
       {/* Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>সেটিংস</Text>
+        <Text style={styles.sectionTitle}>⚙️ সেটিংস</Text>
 
-        <TouchableOpacity style={styles.settingItem} onPress={() => startAction('changeName')}>
-          <Text style={styles.settingIcon}>✏️</Text>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingTitle}>নাম পরিবর্তন</Text>
-            <Text style={styles.settingSubtitle}>আইডি কার্ড স্ক্যান করে নাম পরিবর্তন করুন</Text>
-          </View>
-          <Text style={styles.settingArrow}>›</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.settingItem} onPress={() => startAction('changePassword')}>
-          <Text style={styles.settingIcon}>🔒</Text>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingTitle}>পাসওয়ার্ড পরিবর্তন</Text>
-            <Text style={styles.settingSubtitle}>আইডি কার্ড স্ক্যান করে পাসওয়ার্ড পরিবর্তন করুন</Text>
-          </View>
-          <Text style={styles.settingArrow}>›</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.settingItem} onPress={handleViewVotingHistory}>
-          <Text style={styles.settingIcon}>📊</Text>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingTitle}>ভোটিং হিস্টরি</Text>
-            <Text style={styles.settingSubtitle}>আপনার ভোটদানের ইতিহাস দেখুন</Text>
-          </View>
-          <Text style={styles.settingArrow}>›</Text>
-        </TouchableOpacity>
+        {[
+          {
+            icon: '✏️',
+            title: 'নাম পরিবর্তন',
+            subtitle: 'আইডি কার্ড স্ক্যান করে নাম পরিবর্তন করুন',
+            gradient: Colors.gradients.ocean,
+            onPress: () => startAction('changeName'),
+          },
+          {
+            icon: '📱',
+            title: 'ফোন নাম্বার আপডেট',
+            subtitle: 'আইডি কার্ড স্ক্যান করে OTP-এর জন্য ফোন নাম্বার সেট করুন',
+            gradient: Colors.gradients.info,
+            onPress: () => startAction('changePhone'),
+          },
+          {
+            icon: '🔒',
+            title: 'পাসওয়ার্ড পরিবর্তন',
+            subtitle: 'আইডি কার্ড স্ক্যান করে পাসওয়ার্ড পরিবর্তন করুন',
+            gradient: Colors.gradients.sunset,
+            onPress: () => startAction('changePassword'),
+          },
+          {
+            icon: '📊',
+            title: 'ভোটিং হিস্টরি',
+            subtitle: 'আপনার ভোটদানের ইতিহাস দেখুন',
+            gradient: Colors.gradients.success,
+            onPress: () => showAlert('Info', 'ভোটিং হিস্টরি শীঘ্রই আসছে'),
+          },
+        ].map((item, idx) => (
+          <TouchableOpacity key={idx} style={styles.settingItem} onPress={item.onPress} activeOpacity={0.85}>
+            <LinearGradient
+              colors={item.gradient}
+              style={styles.settingIconBg}
+            >
+              <Text style={styles.settingIcon}>{item.icon}</Text>
+            </LinearGradient>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>{item.title}</Text>
+              <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
+            </View>
+            <Text style={styles.settingArrow}>›</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* App Information */}
+      {/* App Info */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>অ্যাপ তথ্য</Text>
-        
+        <Text style={styles.sectionTitle}>ℹ️ অ্যাপ তথ্য</Text>
         <View style={styles.appInfoCard}>
+          <LinearGradient
+            colors={Colors.gradients.aurora}
+            style={styles.appIconGradient}
+          >
+            <Text style={styles.appIconEmoji}>🗳️</Text>
+          </LinearGradient>
           <Text style={styles.appName}>JOKSHU Voting App</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
           <Text style={styles.appDescription}>
@@ -292,10 +329,17 @@ export const ProfileScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Logout Button */}
-      <View style={styles.logoutContainer}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>🚪 লগআউট</Text>
+      {/* Logout */}
+      <View style={styles.logoutSection}>
+        <TouchableOpacity onPress={handleLogout} activeOpacity={0.85}>
+          <LinearGradient
+            colors={Colors.gradients.danger}
+            style={styles.logoutButton}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -308,10 +352,7 @@ export const ProfileScreen: React.FC = () => {
       {/* ID Card Scanner */}
       <IDCardScanner
         visible={showScanner}
-        onClose={() => {
-          setShowScanner(false);
-          setPendingAction(null);
-        }}
+        onClose={() => { setShowScanner(false); setPendingAction(null); }}
         onScanSuccess={handleScanSuccess}
         expectedId={user.studentId}
       />
@@ -320,32 +361,42 @@ export const ProfileScreen: React.FC = () => {
       <Modal visible={showNameModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>নাম পরিবর্তন</Text>
-            <Text style={styles.modalVerified}>✅ আইডি যাচাই সম্পন্ন</Text>
-
-            <Text style={styles.modalLabel}>নতুন নাম:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="আপনার নতুন নাম লিখুন"
-              placeholderTextColor="#999"
-              value={newName}
-              onChangeText={setNewName}
-              autoFocus
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => {
-                  setShowNameModal(false);
-                  setIsVerified(false);
-                }}
-              >
-                <Text style={styles.modalCancelText}>বাতিল</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveButton} onPress={handleNameChange}>
-                <Text style={styles.modalSaveText}>সংরক্ষণ করুন</Text>
-              </TouchableOpacity>
+            <LinearGradient
+              colors={Colors.gradients.ocean}
+              style={styles.modalGradientHeader}
+            >
+              <Text style={styles.modalHeaderIcon}>✏️</Text>
+              <Text style={styles.modalTitle}>নাম পরিবর্তন</Text>
+            </LinearGradient>
+            <View style={styles.modalBody}>
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>✅ আইডি যাচাই সম্পন্ন</Text>
+              </View>
+              <Text style={styles.modalLabel}>নতুন নাম:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="আপনার নতুন নাম লিখুন"
+                placeholderTextColor={Colors.textMuted}
+                value={newName}
+                onChangeText={setNewName}
+                autoFocus
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => { setShowNameModal(false); setIsVerified(false); }}
+                >
+                  <Text style={styles.modalCancelText}>বাতিল</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleNameChange} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={Colors.gradients.ocean}
+                    style={styles.modalSaveButton}
+                  >
+                    <Text style={styles.modalSaveText}>সংরক্ষণ করুন</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -355,53 +406,111 @@ export const ProfileScreen: React.FC = () => {
       <Modal visible={showPasswordModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>পাসওয়ার্ড পরিবর্তন</Text>
-            <Text style={styles.modalVerified}>✅ আইডি যাচাই সম্পন্ন</Text>
+            <LinearGradient
+              colors={Colors.gradients.sunset}
+              style={styles.modalGradientHeader}
+            >
+              <Text style={styles.modalHeaderIcon}>🔒</Text>
+              <Text style={styles.modalTitle}>পাসওয়ার্ড পরিবর্তন</Text>
+            </LinearGradient>
+            <View style={styles.modalBody}>
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>✅ আইডি যাচাই সম্পন্ন</Text>
+              </View>
 
-            <Text style={styles.modalLabel}>বর্তমান পাসওয়ার্ড:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="বর্তমান পাসওয়ার্ড লিখুন"
-              placeholderTextColor="#999"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              autoFocus
-            />
+              <Text style={styles.modalLabel}>বর্তমান পাসওয়ার্ড:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="বর্তমান পাসওয়ার্ড"
+                placeholderTextColor={Colors.textMuted}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                autoFocus
+              />
+              <Text style={styles.modalLabel}>নতুন পাসওয়ার্ড:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="নতুন পাসওয়ার্ড"
+                placeholderTextColor={Colors.textMuted}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+              <Text style={styles.modalLabel}>নিশ্চিত করুন:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="নতুন পাসওয়ার্ড আবার লিখুন"
+                placeholderTextColor={Colors.textMuted}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
 
-            <Text style={styles.modalLabel}>নতুন পাসওয়ার্ড:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="নতুন পাসওয়ার্ড লিখুন"
-              placeholderTextColor="#999"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-            />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => { setShowPasswordModal(false); setIsVerified(false); }}
+                >
+                  <Text style={styles.modalCancelText}>বাতিল</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handlePasswordChange} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={Colors.gradients.sunset}
+                    style={styles.modalSaveButton}
+                  >
+                    <Text style={styles.modalSaveText}>পরিবর্তন করুন</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-            <Text style={styles.modalLabel}>নতুন পাসওয়ার্ড নিশ্চিত করুন:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="নতুন পাসওয়ার্ড আবার লিখুন"
-              placeholderTextColor="#999"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
+      {/* Change Phone Number Modal */}
+      <Modal visible={showPhoneModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <LinearGradient
+              colors={Colors.gradients.info}
+              style={styles.modalGradientHeader}
+            >
+              <Text style={styles.modalHeaderIcon}>📱</Text>
+              <Text style={styles.modalTitle}>ফোন নাম্বার আপডেট</Text>
+            </LinearGradient>
+            <View style={styles.modalBody}>
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>✅ আইডি যাচাই সম্পন্ন</Text>
+              </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => {
-                  setShowPasswordModal(false);
-                  setIsVerified(false);
-                }}
-              >
-                <Text style={styles.modalCancelText}>বাতিল</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveButton} onPress={handlePasswordChange}>
-                <Text style={styles.modalSaveText}>পরিবর্তন করুন</Text>
-              </TouchableOpacity>
+              <Text style={styles.modalLabel}>ফোন নাম্বার:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="যেমন: +8801XXXXXXXXX"
+                placeholderTextColor={Colors.textMuted}
+                value={newPhoneNumber}
+                onChangeText={setNewPhoneNumber}
+                keyboardType="phone-pad"
+                autoFocus
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => { setShowPhoneModal(false); setIsVerified(false); }}
+                >
+                  <Text style={styles.modalCancelText}>বাতিল</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handlePhoneNumberChange} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={Colors.gradients.info}
+                    style={styles.modalSaveButton}
+                  >
+                    <Text style={styles.modalSaveText}>সংরক্ষণ করুন</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -411,335 +520,167 @@ export const ProfileScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  noUserContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noUserText: {
-    fontSize: 18,
-    color: '#666',
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  noUserContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  noUserText: { fontSize: 18, color: Colors.textMuted },
+  // Header
   header: {
-    backgroundColor: '#1a472a',
     padding: 30,
     alignItems: 'center',
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 5,
-  },
-  userRole: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  adminBadge: {
-    backgroundColor: '#ffd700',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 10,
-  },
-  adminBadgeText: {
-    color: '#1a472a',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  section: {
-    margin: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  infoCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  votingCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  votingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  votingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  votingStatus: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  votedStatus: {
-    backgroundColor: '#4CAF50',
-  },
-  pendingStatus: {
-    backgroundColor: '#FF9800',
-  },
-  votingStatusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  progressContainer: {
-    marginBottom: 15,
-  },
-  progressLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
+  headerDecor1: {
+    position: 'absolute', width: 200, height: 200, borderRadius: 100,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)', top: -60, right: -40,
   },
-  votedPositions: {
-    marginTop: 10,
+  headerDecor2: {
+    position: 'absolute', width: 140, height: 140, borderRadius: 70,
+    backgroundColor: 'rgba(0, 210, 255, 0.06)', bottom: -20, left: -30,
   },
-  votedPositionsTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  votedPosition: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 3,
-  },
-  settingItem: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  settingIcon: {
-    fontSize: 24,
-    marginRight: 15,
-  },
-  settingContent: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  settingSubtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 3,
-  },
-  settingArrow: {
-    fontSize: 20,
-    color: '#ccc',
-  },
-  appInfoCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  appName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a472a',
-  },
-  appVersion: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-  },
-  appDescription: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  logoutContainer: {
-    margin: 20,
-  },
-  logoutButton: {
-    backgroundColor: '#f44336',
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  logoutButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  footer: {
-    alignItems: 'center',
-    padding: 30,
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a472a',
-  },
-  footerSubtext: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  avatarGradient: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    marginBottom: 14,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
     elevation: 8,
   },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    textAlign: 'center',
-    marginBottom: 4,
+  avatarText: { fontSize: 36, fontWeight: '900', color: Colors.white },
+  userName: { fontSize: 24, fontWeight: '900', color: Colors.white, marginBottom: 4 },
+  userRole: { fontSize: 15, color: 'rgba(255,255,255,0.7)' },
+  adminBadge: {
+    paddingHorizontal: 18, paddingVertical: 7, borderRadius: BorderRadius.full, marginTop: 10,
   },
-  modalVerified: {
-    fontSize: 14,
-    color: '#4CAF50',
-    textAlign: 'center',
-    marginBottom: 20,
+  adminBadgeText: { color: '#1A1D26', fontSize: 13, fontWeight: '800' },
+  // Section
+  section: { marginHorizontal: 20, marginTop: 24 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary, marginBottom: 14 },
+  // Info Card
+  infoCard: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 16,
+  },
+  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.divider },
+  infoLabelRow: { flexDirection: 'row', alignItems: 'center' },
+  infoIcon: { fontSize: 18, marginRight: 10 },
+  infoLabel: { fontSize: 15, color: Colors.textSecondary },
+  infoValue: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  // Voting Card
+  votingCard: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  votingHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18,
+  },
+  votingTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  votingStatusBadge: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: BorderRadius.full,
+  },
+  votingStatusText: { color: Colors.white, fontSize: 12, fontWeight: 'bold' },
+  progressSection: {},
+  progressRow: {
+    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8,
+  },
+  progressLabel: { fontSize: 14, color: Colors.textSecondary },
+  progressPercent: { fontSize: 14, fontWeight: 'bold', color: Colors.success },
+  progressBarBg: {
+    height: 8, backgroundColor: Colors.background, borderRadius: 4, overflow: 'hidden',
+  },
+  progressBarFill: { height: '100%', borderRadius: 4 },
+  votedPositionsSection: { marginTop: 16 },
+  votedPositionsTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
+  votedPositionItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  votedCheckmark: { fontSize: 14, marginRight: 8 },
+  votedPositionText: { fontSize: 14, color: Colors.textSecondary },
+  // Settings
+  settingItem: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 16,
+    marginBottom: 10, flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 3, elevation: 2,
+  },
+  settingIconBg: {
+    width: 44, height: 44, borderRadius: 22,
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  settingIcon: { fontSize: 20 },
+  settingContent: { flex: 1 },
+  settingTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  settingSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 3 },
+  settingArrow: { fontSize: 22, color: Colors.textMuted, fontWeight: 'bold' },
+  // App info
+  appInfoCard: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  appIconGradient: {
+    width: 60, height: 60, borderRadius: 30,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
+  },
+  appIconEmoji: { fontSize: 30 },
+  appName: { fontSize: 19, fontWeight: '800', color: Colors.primary },
+  appVersion: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
+  appDescription: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginTop: 10 },
+  // Logout
+  logoutSection: { margin: 20 },
+  logoutButton: {
+    borderRadius: BorderRadius.lg, padding: 18, alignItems: 'center',
+    shadowColor: Colors.danger, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  },
+  logoutButtonText: { color: Colors.white, fontSize: 18, fontWeight: 'bold' },
+  // Footer
+  footer: { alignItems: 'center', paddingVertical: 30 },
+  footerText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  footerSubtext: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center',
+    alignItems: 'center', padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
+    width: '100%', maxWidth: 400, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25, shadowRadius: 16, elevation: 12,
+  },
+  modalGradientHeader: {
+    padding: 20, alignItems: 'center',
+  },
+  modalHeaderIcon: { fontSize: 28, marginBottom: 6 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.white },
+  modalBody: { padding: 24 },
+  verifiedBadge: { alignItems: 'center', marginBottom: 18 },
+  verifiedText: { fontSize: 14, color: Colors.success, fontWeight: '600' },
   modalLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-    marginTop: 12,
+    fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6, marginTop: 12,
   },
   modalInput: {
-    borderWidth: 1.5,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: BorderRadius.md,
+    padding: 14, fontSize: 16, backgroundColor: Colors.background, color: Colors.textPrimary,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    marginTop: 24,
-    gap: 12,
-  },
+  modalButtons: { flexDirection: 'row', marginTop: 24, gap: 12 },
   modalCancelButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    alignItems: 'center',
+    flex: 1, padding: 14, borderRadius: BorderRadius.md,
+    borderWidth: 2, borderColor: Colors.border, alignItems: 'center',
   },
-  modalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
+  modalCancelText: { fontSize: 16, fontWeight: '600', color: Colors.textSecondary },
   modalSaveButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#1a472a',
-    alignItems: 'center',
+    flex: 1, padding: 14, borderRadius: BorderRadius.md, alignItems: 'center',
   },
-  modalSaveText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-  },
+  modalSaveText: { fontSize: 16, fontWeight: 'bold', color: Colors.white },
 });

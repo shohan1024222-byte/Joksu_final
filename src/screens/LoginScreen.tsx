@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  Modal,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context';
+import { Colors } from '../theme';
 
-// Custom alert function for web compatibility
+const { height } = Dimensions.get('window');
+
 const showAlert = (title: string, message: string) => {
   if (Platform.OS === 'web') {
     window.alert(`${title}\n\n${message}`);
@@ -26,199 +32,168 @@ export const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const [loginErrorVisible, setLoginErrorVisible] = useState(false);
+
+  const logoScale = useRef(new Animated.Value(0)).current;
+  const formSlide = useRef(new Animated.Value(50)).current;
+  const formOpacity = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.parallel([
+        Animated.timing(formSlide, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(formOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.05, duration: 2000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
 
   const handleLogin = async () => {
     if (!studentId.trim() || !password.trim()) {
       showAlert('ত্রুটি', 'অনুগ্রহ করে Student ID এবং Password দিন');
       return;
     }
-
-    console.log('Attempting login with:', studentId.trim(), password);
     setLoading(true);
-    
     try {
       const success = await login(studentId.trim(), password);
-      console.log('Login result:', success);
       setLoading(false);
-
       if (!success) {
-        showAlert('Login Failed', 'Invalid Student ID or Password\n\nTry:\nID: 4155 or 2022331001\nPassword: 123456');
+        setLoginErrorVisible(true);
       }
     } catch (error) {
-      console.error('Login error in screen:', error);
       setLoading(false);
       showAlert('Error', 'Something went wrong. Please try again.');
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.content}>
-        {/* Logo and Title */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>🗳️</Text>
-          </View>
-          <Text style={styles.title}>JOKSHU</Text>
-          <Text style={styles.subtitle}>জগন্নাথ বিশ্ববিদ্যালয়</Text>
-          <Text style={styles.subtitle}>কেন্দ্রীয় ছাত্র সংসদ</Text>
-          <Text style={styles.electionText}>নির্বাচন ২০২৬</Text>
-        </View>
+    <LinearGradient colors={['#151825', '#1E2745', '#2D3250']} style={styles.container} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+      <View style={styles.decorCircle1} />
+      <View style={styles.decorCircle2} />
+      <View style={styles.decorCircle3} />
 
-        {/* Login Form */}
-        <View style={styles.formContainer}>
-          <Text style={styles.inputLabel}>Student ID</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your Student ID"
-            placeholderTextColor="#999"
-            value={studentId}
-            onChangeText={setStudentId}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          
-          <Text style={styles.inputLabel}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+      <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.content}>
+          <Animated.View style={[styles.logoContainer, { transform: [{ scale: Animated.multiply(logoScale, pulseAnim) }] }]}>
+            <LinearGradient colors={Colors.gradients.aurora} style={styles.logoGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <Text style={styles.logoEmoji}>🗳️</Text>
+            </LinearGradient>
+            <Text style={styles.title}>JOKSHU</Text>
+            <Text style={styles.subtitle}>জগন্নাথ বিশ্ববিদ্যালয়</Text>
+            <Text style={styles.subtitle2}>কেন্দ্রীয় ছাত্র সংসদ</Text>
+            <LinearGradient colors={Colors.gradients.candy} style={styles.electionBadge} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <Text style={styles.electionText}>✨ নির্বাচন ২০২৬ ✨</Text>
+            </LinearGradient>
+          </Animated.View>
 
-          <TouchableOpacity 
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.loginButtonText}>লগইন করুন</Text>
-            )}
-          </TouchableOpacity>
+          <Animated.View style={[styles.formContainer, { opacity: formOpacity, transform: [{ translateY: formSlide }] }]}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>🎓 Student ID</Text>
+              <TextInput style={styles.input} placeholder="Enter your Student ID" placeholderTextColor={Colors.textMuted} value={studentId} onChangeText={setStudentId} autoCapitalize="none" autoCorrect={false} />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>🔒 Password</Text>
+              <TextInput style={styles.input} placeholder="Enter your password" placeholderTextColor={Colors.textMuted} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} />
+            </View>
+            <TouchableOpacity onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
+              <LinearGradient colors={loading ? ['#999', '#888'] : Colors.gradients.primary} style={styles.loginButton} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                {loading ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.loginButtonText}>লগইন করুন →</Text>}
+              </LinearGradient>
+            </TouchableOpacity>
+            {/* Custom error modal for login failures */}
+            <Modal visible={loginErrorVisible} transparent animationType="fade" onRequestClose={() => setLoginErrorVisible(false)}>
+              <View style={styles.modalOverlay}>
+                <View style={styles.errorModal}>
+                  <Text style={styles.errorTitle}>Login Failed</Text>
+                  <Text style={styles.errorMessage}>অবৈধ পাসওয়ার্ড। পাসওয়ার্ড ভুলে গেলে ভোট কর্তৃপক্ষের সাথে যোগাযোগ করুন।</Text>
+                  <TouchableOpacity style={styles.errorBtn} onPress={() => setLoginErrorVisible(false)}>
+                    <Text style={styles.errorBtnText}>OK</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
+          </Animated.View>
         </View>
-
-        {/* Demo Credentials */}
-        <View style={styles.demoContainer}>
-          <Text style={styles.demoTitle}>Demo Credentials:</Text>
-          <Text style={styles.demoText}>Student: 2022331001 / 123456</Text>
-          <Text style={styles.demoText}>Admin: admin / admin123</Text>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1 },
+  keyboardView: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  decorCircle1: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(108,99,255,0.08)', top: -100, right: -80 },
+  decorCircle2: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,107,107,0.06)', bottom: 50, left: -60 },
+  decorCircle3: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(0,210,255,0.06)', top: height * 0.3, left: -30 },
+  logoContainer: { alignItems: 'center', marginBottom: 40 },
+  logoGradient: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 12 },
+  logoEmoji: { fontSize: 52 },
+  title: { fontSize: 38, fontWeight: '900', color: '#fff', letterSpacing: 4, marginBottom: 8 },
+  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.7)', marginBottom: 2 },
+  subtitle2: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 12 },
+  electionBadge: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 100, marginTop: 6 },
+  electionText: { fontSize: 16, fontWeight: 'bold', color: '#fff', letterSpacing: 1 },
+  formContainer: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 24 },
+  inputGroup: { marginBottom: 18 },
+  inputLabel: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.85)', marginBottom: 8, marginLeft: 4 },
+  input: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 16, fontSize: 16, color: '#fff' },
+  loginButton: { padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 8, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
+  loginButtonText: { color: '#fff', fontSize: 19, fontWeight: 'bold', letterSpacing: 1 },
+  modalOverlay: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 50,
-  },
-  logoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#1a472a',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 24,
   },
-  logoText: {
-    fontSize: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-  electionText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#9C27B0',
-    marginTop: 10,
-  },
-  formContainer: {
-    backgroundColor: 'white',
+  errorModal: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 14,
     padding: 20,
-    borderRadius: 15,
-    marginBottom: 30,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    marginTop: 15,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-  },
-  loginButton: {
-    backgroundColor: '#1a472a',
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 25,
-    alignItems: 'center',
-  },
-  loginButtonDisabled: {
-    backgroundColor: '#999',
-  },
-  loginButtonText: {
-    color: 'white',
+  errorTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 8,
   },
-  demoContainer: {
-    backgroundColor: 'rgba(26, 71, 42, 0.1)',
-    padding: 15,
+  errorMessage: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  errorBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 10,
   },
-  demoTitle: {
+  errorBtnText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    marginBottom: 5,
-  },
-  demoText: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
   },
 });
