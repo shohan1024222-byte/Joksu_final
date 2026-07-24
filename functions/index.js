@@ -61,7 +61,7 @@ exports.requestVoteOtp = functions.https.onRequest(async (req, res) => {
     await twilioClient.messages.create({
       from: twilioFrom,
       to: normalizedPhone,
-      body: `JOKSHU ভোট OTP: ${otpCode}. মেয়াদ ${OTP_TTL_SECONDS} সেকেন্ড।`,
+      body: `JOKSHU voting OTP: ${otpCode}. Expires in ${OTP_TTL_SECONDS} seconds.`,
     });
 
     res.status(200).json({ ok: true });
