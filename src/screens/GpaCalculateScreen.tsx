@@ -18,6 +18,7 @@ import { gpaCourses, GpaCourse } from '../data/gpaCourses';
 import { gpaResults, StudentResult } from '../data/gpaResults';
 import { loadGpaCourses, loadGpaResults } from '../data/gpaStore';
 import { RootStackParamList } from '../navigation/types';
+import { normalizeStudentId } from '../utils/studentId';
 
 type GradeInputs = Record<string, string>;
 
@@ -102,9 +103,9 @@ export const GpaCalculateScreen: React.FC = () => {
   }, [route.params?.studentId, user, isAdmin]);
 
   const selectedStudent = useMemo(() => {
-    const term = studentId.trim().toLowerCase();
+    const term = normalizeStudentId(studentId);
     if (!term) return null;
-    return results.find((student) => student.id.toLowerCase() === term) || null;
+    return results.find((student) => normalizeStudentId(student.id) === term) || null;
   }, [results, studentId]);
 
   const handleChange = (code: string, value: string) => {

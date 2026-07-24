@@ -53,9 +53,17 @@ const defaultMenuVisibility: Record<MenuOptionKey, boolean> = {
 
 const MENU_VISIBILITY_KEY = 'homeMenuVisibility';
 
-const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
-  else Alert.alert(title, message);
+const showAlert = (title: string, message: string, buttons?: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>) => {
+  if (Platform.OS === 'web') {
+    if (buttons && buttons.length > 1) {
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed && buttons[1]?.onPress) buttons[1].onPress();
+    } else {
+      window.alert(`${title}\n\n${message}`);
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
 };
 
 export const HomeScreen: React.FC = () => {
@@ -130,9 +138,9 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'আপনি কি সত্যিই লগআউট করতে চান?', [
+    showAlert('Logout', 'আপনি কি সত্যিই লগআউট করতে চান?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', onPress: logout, style: 'destructive' },
+      { text: 'Logout', onPress: () => logout(), style: 'destructive' },
     ]);
   };
 

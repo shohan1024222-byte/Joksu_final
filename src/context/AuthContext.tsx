@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { FirebaseStorage } from '../firebase';
 import { Student, AuthContextType } from '../types';
 import { STUDENTS, PASSWORDS } from '../data/mockData';
+import { deleteRecordValueByStudentId, findStudentById, getRecordValueByStudentId, setRecordValueByStudentId } from '../utils/studentId';
 
 const HASH_PREFIX = 'sha256:';
 
@@ -63,20 +64,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('Login attempt:', studentId);
       
+      const trimmedStudentId = studentId.trim();
+
       // First check if there's a custom password for this user
       let storedPassword;
       let customPasswords: Record<string, string> = {};
       try {
         const customPasswordsData = await Storage.getItem('customPasswords');
         customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-        storedPassword = customPasswords[studentId] || PASSWORDS[studentId];
+        storedPassword = getRecordValueByStudentId(customPasswords, trimmedStudentId) || getRecordValueByStudentId(PASSWORDS as Record<string, string>, trimmedStudentId);
       } catch (e) {
-        storedPassword = PASSWORDS[studentId];
+        storedPassword = getRecordValueByStudentId(PASSWORDS as Record<string, string>, trimmedStudentId);
       }
 
       if (storedPassword && await verifyPassword(storedPassword, password)) {
-        if (customPasswords[studentId] && !isHashedPassword(customPasswords[studentId])) {
-          customPasswords[studentId] = await hashPassword(password);
+        if (getRecordValueByStudentId(customPasswords, trimmedStudentId) && !isHashedPassword(getRecordValueByStudentId(customPasswords, trimmedStudentId)!)) {
+          setRecordValueByStudentId(customPasswords, trimmedStudentId, await hashPassword(password));
           await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
         }
 
@@ -85,9 +88,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
           const customUsersData = await Storage.getItem('customUsers');
           const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
-          foundStudent = customUsers[studentId] || STUDENTS.find(s => s.studentId === studentId);
+          foundStudent = getRecordValueByStudentId(customUsers, trimmedStudentId) || findStudentById(STUDENTS, trimmedStudentId);
         } catch (e) {
-          foundStudent = STUDENTS.find(s => s.studentId === studentId);
+          foundStudent = findStudentById(STUDENTS, trimmedStudentId);
         }
         
         console.log('Found student:', foundStudent);
@@ -96,7 +99,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Load any stored voting data
           let userWithVotingData = { ...foundStudent };
           try {
-            const storedVotingData = await Storage.getItem(`voter_${studentId}`);
+            const storedVotingData = await Storage.getItem(`voter_${trimmedStudentId}`);
             if (storedVotingData) {
               userWithVotingData = { ...foundStudent, ...JSON.parse(storedVotingData) };
             }
@@ -128,11 +131,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await Storage.removeItem('currentUser');
-      setUser(null);
-      setIsAuthenticated(false);
+      await Promise.allSettled([
+        Storage.removeItem('currentUser'),
+        AsyncStorage.removeItem('currentUser'),
+      ]);
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
     }
   };
 
@@ -146,7 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Save custom user data
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
-      customUsers[user.studentId] = updatedUser;
+      setRecordValueByStudentId(customUsers, user.studentId, updatedUser);
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       return true;
@@ -166,9 +173,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Save custom user data so admin view and OTP flow can use latest number.
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
-      const existingMock = STUDENTS.find(s => s.studentId === user.studentId);
-      const base = customUsers[user.studentId] || existingMock || updatedUser;
-      customUsers[user.studentId] = { ...base, ...updatedUser, phoneNumber };
+      const existingMock = findStudentById(STUDENTS, user.studentId);
+      const base = getRecordValueByStudentId(customUsers, user.studentId) || existingMock || updatedUser;
+      setRecordValueByStudentId(customUsers, user.studentId, { ...base, ...updatedUser, phoneNumber });
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       return true;
@@ -185,14 +192,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       let storedPassword;
       const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-      storedPassword = customPasswords[user.studentId] || PASSWORDS[user.studentId];
+      storedPassword = getRecordValueByStudentId(customPasswords, user.studentId) || getRecordValueByStudentId(PASSWORDS as Record<string, string>, user.studentId);
 
       if (!storedPassword || !(await verifyPassword(storedPassword, currentPassword))) {
         return false;
       }
 
       // Save new hashed password
-      customPasswords[user.studentId] = await hashPassword(newPassword);
+      setRecordValueByStudentId(customPasswords, user.studentId, await hashPassword(newPassword));
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
 
       return true;
@@ -206,7 +213,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-      customPasswords[studentId] = await hashPassword(newPassword);
+      setRecordValueByStudentId(customPasswords, studentId, await hashPassword(newPassword));
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
       return true;
     } catch (error) {
@@ -218,11 +225,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const addStudent = async (studentId: string, name: string, password: string, department: string, session: string, phoneNumber: string = ''): Promise<boolean> => {
     try {
       // Check if student already exists
-      const existingStudent = STUDENTS.find(s => s.studentId === studentId);
+      const existingStudent = findStudentById(STUDENTS, studentId);
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       
-      if (existingStudent || customUsers[studentId]) {
+      if (existingStudent || getRecordValueByStudentId(customUsers, studentId)) {
         // Already exists, but we allow re-adding (update)
       }
 
@@ -239,13 +246,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       };
 
       // Save to customUsers
-      customUsers[studentId] = newStudent;
+      setRecordValueByStudentId(customUsers, studentId, newStudent);
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       // Save hashed password
       const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-      customPasswords[studentId] = await hashPassword(password);
+      setRecordValueByStudentId(customPasswords, studentId, await hashPassword(password));
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
       await refreshRegisteredStudentsCount();
 
@@ -278,7 +285,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Add custom students (may override mock ones)
       Object.values(customUsers).forEach((s: any) => {
         if (s.studentId !== 'admin') {
-          const existingIdx = allStudents.findIndex(x => x.studentId === s.studentId);
+          const existingIdx = allStudents.findIndex(x => x.studentId.toLowerCase() === s.studentId.toLowerCase());
           if (existingIdx >= 0) {
             allStudents[existingIdx] = { studentId: s.studentId, name: s.name, phoneNumber: s.phoneNumber || '', department: s.department, session: s.session };
           } else {
@@ -310,13 +317,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Remove from customUsers
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
-      delete customUsers[studentId];
+      deleteRecordValueByStudentId(customUsers, studentId);
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       // Remove password
       const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
-      delete customPasswords[studentId];
+      deleteRecordValueByStudentId(customPasswords, studentId);
       await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
       await refreshRegisteredStudentsCount();
 
@@ -341,14 +348,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
 
       // Find existing student data (could be mock or custom)
-      const existingMock = STUDENTS.find(s => s.studentId === studentId);
-      const existingCustom = customUsers[studentId];
+      const existingMock = findStudentById(STUDENTS, studentId);
+      const existingCustom = getRecordValueByStudentId(customUsers, studentId);
       const base = existingCustom || existingMock;
 
       if (base) {
-        customUsers[studentId] = { ...base, name, department, session, phoneNumber };
+        setRecordValueByStudentId(customUsers, studentId, { ...base, name, department, session, phoneNumber });
       } else {
-        customUsers[studentId] = {
+        setRecordValueByStudentId(customUsers, studentId, {
           id: `std_${Date.now()}`,
           studentId,
           name,
@@ -357,7 +364,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           session,
           hasVoted: false,
           votedPositions: [],
-        };
+        });
       }
 
       await Storage.setItem('customUsers', JSON.stringify(customUsers));
@@ -370,7 +377,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Treat both the built-in 'admin' user and B210305051 as admin accounts
-  const isAdmin = user?.studentId === 'admin' || user?.studentId === 'B210305051';
+  const isAdmin = user?.studentId?.trim().toLowerCase() === 'admin' || user?.studentId?.trim().toLowerCase() === 'b210305051';
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, registeredStudentsCount, login, logout, updateUserName, updateUserPhoneNumber, updatePassword, updateStudentPassword, addStudent, getRegisteredStudents, removeStudent, updateStudent }}>

@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { gpaCourses, GpaCourse } from '../data/gpaCourses';
 import { gpaResults, StudentResult } from '../data/gpaResults';
 import { loadGpaCourses, loadGpaResults } from '../data/gpaStore';
+import { normalizeStudentId } from '../utils/studentId';
 
 export const GpaCheckScreen: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -45,9 +46,9 @@ export const GpaCheckScreen: React.FC = () => {
   );
 
   const matchedStudent = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = normalizeStudentId(query);
     if (!term) return null;
-    return results.find((student) => student.id.toLowerCase() === term) || null;
+    return results.find((student) => normalizeStudentId(student.id) === term) || null;
   }, [query, results]);
 
   return (

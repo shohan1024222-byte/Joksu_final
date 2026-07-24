@@ -1,0 +1,1 @@
+Place your adaptive icon foreground here (1024x1024 px, PNG format)

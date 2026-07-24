@@ -13,6 +13,7 @@ import { Colors, BorderRadius } from '../theme';
 import { useAuth } from '../context';
 import { gpaCourses } from '../data/gpaCourses';
 import { gpaResults } from '../data/gpaResults';
+import { normalizeStudentId } from '../utils/studentId';
 
 type SemesterOption = {
   id: string;
@@ -50,9 +51,9 @@ export const RetakeImproveScreen: React.FC = () => {
   }, [isAdmin, studentId, user?.studentId]);
 
   const matchedStudent = useMemo(() => {
-    const term = effectiveStudentId.toLowerCase();
+    const term = normalizeStudentId(effectiveStudentId);
     if (!term) return null;
-    return gpaResults.find((student) => student.id.toLowerCase() === term) || null;
+    return gpaResults.find((student) => normalizeStudentId(student.id) === term) || null;
   }, [effectiveStudentId]);
 
   const totalCredits = useMemo(

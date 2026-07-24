@@ -368,17 +368,17 @@ export const VotingScreen: React.FC = () => {
               />
               <View style={styles.confirmBtnRow}>
                 <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => { setShowOtpModal(false); }} activeOpacity={0.85}>
-                  <Text style={styles.confirmCancelText}>বাতিল</Text>
+                  <Text style={styles.confirmCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmYesBtn} onPress={handleRequestOtp} activeOpacity={0.85} disabled={isSendingOtp || isVerifyingOtp}>
+                <TouchableOpacity style={styles.requestBtn} onPress={handleRequestOtp} activeOpacity={0.85} disabled={isSendingOtp || isVerifyingOtp}>
                   {isSendingOtp
-                    ? <ActivityIndicator color={Colors.primary} />
-                    : <Text style={styles.confirmYesText}>{otpStatus === 'pending' ? 'Request Again' : 'Request OTP'}</Text>}
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.requestBtnText}>{otpStatus === 'pending' ? 'Request Again' : 'Request OTP'}</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmYesBtn} onPress={handleVerifyOtp} activeOpacity={0.85} disabled={isVerifyingOtp || isSendingOtp}>
+                <TouchableOpacity style={styles.verifyBtn} onPress={handleVerifyOtp} activeOpacity={0.85} disabled={isVerifyingOtp || isSendingOtp}>
                   {isVerifyingOtp || isSendingOtp
-                    ? <ActivityIndicator color={Colors.primary} />
-                    : <Text style={styles.confirmYesText}>Verify OTP</Text>}
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.verifyBtnText}>Verify OTP</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -426,38 +426,51 @@ const styles = StyleSheet.create({
   voteBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   manifesto: { fontSize: 13, color: Colors.textSecondary, fontStyle: 'italic', lineHeight: 20 },
 
-  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  confirmCard: { width: '100%', maxWidth: 410, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 12 },
-  confirmHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 18, gap: 8 },
-  confirmIcon: { fontSize: 24 },
-  confirmTitle: { fontSize: 22, fontWeight: '900', color: '#fff' },
-  confirmBody: { padding: 20 },
-  confirmText: { fontSize: 17, lineHeight: 27, color: Colors.textPrimary, marginBottom: 20 },
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  confirmCard: { width: '100%', maxWidth: 430, backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  confirmHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 20, gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.18)' },
+  confirmIcon: { fontSize: 26 },
+  confirmTitle: { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
+  confirmBody: { padding: 22, backgroundColor: '#f8f9ff' },
+  confirmText: { fontSize: 16, lineHeight: 24, color: Colors.textPrimary, marginBottom: 18 },
   confirmCandidateName: { fontWeight: '900', color: Colors.textPrimary },
-  confirmBtnRow: { flexDirection: 'row', gap: 12 },
-  confirmCancelBtn: { flex: 1, borderWidth: 2, borderColor: Colors.primary, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: '#fff' },
-  confirmCancelText: { fontSize: 16, fontWeight: '700', color: Colors.textSecondary },
-  confirmYesBtn: { flex: 1, borderWidth: 2, borderColor: Colors.primary, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: '#fff' },
-  confirmYesText: { fontSize: 16, fontWeight: '800', color: Colors.primary },
+  confirmBtnRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
+  confirmCancelBtn: { flex: 1, minWidth: 110, marginHorizontal: 0, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 5 },
+  confirmCancelText: { fontSize: 15, fontWeight: '700', color: Colors.textSecondary },
+  confirmYesBtn: { flex: 1, minWidth: 110, marginHorizontal: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.primary, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 8 },
+  confirmYesText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  requestBtn: { flex: 1, minWidth: 110, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.gradients.ocean[0], borderColor: Colors.gradients.ocean[1], borderWidth: 0, shadowColor: Colors.gradients.ocean[0], shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
+  requestBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  verifyBtn: { flex: 1, minWidth: 110, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.gradients.success[0], borderColor: Colors.gradients.success[1], borderWidth: 0, shadowColor: Colors.gradients.success[0], shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
+  verifyBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   otpInput: {
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 18,
-    letterSpacing: 3,
-    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.12)',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 22,
+    letterSpacing: 18,
+    backgroundColor: '#fff',
     marginBottom: 16,
     color: Colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
   },
   otpStatusText: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: 12,
-    lineHeight: 20,
+    marginBottom: 16,
+    lineHeight: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(15,23,42,0.04)',
+    borderRadius: 14,
   },
   entryGateBanner: {
     position: 'absolute',

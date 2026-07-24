@@ -6,6 +6,7 @@ import { Colors, BorderRadius } from '../theme';
 import { gpaResults, StudentResult } from '../data/gpaResults';
 import { loadGpaResults } from '../data/gpaStore';
 import { useAuth } from '../context/AuthContext';
+import { normalizeStudentId } from '../utils/studentId';
 
 type RankedStudent = StudentResult & { rank: number; score: number };
 
@@ -34,11 +35,22 @@ export const GpaRankingScreen: React.FC = () => {
   const { user, isAdmin, isAuthenticated } = useAuth();
   const [results, setResults] = useState<StudentResult[]>(gpaResults);
 
-  const visibleResults = useMemo(() => {
-    if (isAdmin) return results;
+  const fullSemesterRanking = useMemo(() => buildRanking(results, 'semesterGpa'), [results]);
+  const fullCgpaRanking = useMemo(() => buildRanking(results, 'cgpa'), [results]);
+
+  const visibleSemesterRanking = useMemo(() => {
+    if (isAdmin) return fullSemesterRanking;
     if (!user) return [];
-    return results.filter((student) => student.id.toLowerCase() === user.studentId.toLowerCase());
-  }, [results, user, isAdmin]);
+    const currentId = normalizeStudentId(user.studentId);
+    return fullSemesterRanking.filter((student) => normalizeStudentId(student.id) === currentId);
+  }, [fullSemesterRanking, user, isAdmin]);
+
+  const visibleCgpaRanking = useMemo(() => {
+    if (isAdmin) return fullCgpaRanking;
+    if (!user) return [];
+    const currentId = normalizeStudentId(user.studentId);
+    return fullCgpaRanking.filter((student) => normalizeStudentId(student.id) === currentId);
+  }, [fullCgpaRanking, user, isAdmin]);
 
   const refreshResults = useCallback(async () => {
     const storedResults = await loadGpaResults();
@@ -51,8 +63,8 @@ export const GpaRankingScreen: React.FC = () => {
     }, [refreshResults])
   );
 
-  const semesterRanking = useMemo(() => buildRanking(visibleResults, 'semesterGpa'), [visibleResults]);
-  const cgpaRanking = useMemo(() => buildRanking(visibleResults, 'cgpa'), [visibleResults]);
+  const semesterRanking = visibleSemesterRanking;
+  const cgpaRanking = visibleCgpaRanking;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
