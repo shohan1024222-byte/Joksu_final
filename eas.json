@@ -7,9 +7,6 @@
   "build": {
     "development": {
       "distribution": "internal",
-      "android": {
-        "gradleCommand": ":app:assembleDebug"
-      },
       "ios": {
         "resourceClass": "m1-medium"
       },
@@ -18,8 +15,7 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "apk"
       },
       "ios": {
         "resourceClass": "m1-medium"
