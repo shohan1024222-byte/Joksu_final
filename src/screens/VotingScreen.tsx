@@ -228,18 +228,18 @@ export const VotingScreen: React.FC = () => {
   const otpRequest = getVoteOtpRequest(user?.studentId || '');
   const otpStatus = otpRequest?.status || 'not_requested';
   const otpStatusText = otpStatus === 'pending'
-    ? 'OTP request pending (admin approval অপেক্ষায়)।'
+    ? 'OTP request is pending. Waiting for admin approval.'
     : otpStatus === 'approved'
-      ? 'OTP approved. Admin থেকে SMS এসেছে, OTP লিখুন।'
+      ? 'OTP approved. SMS sent by admin. Enter the OTP.'
       : otpStatus === 'sent'
-        ? 'OTP SMS পাঠানো হয়েছে। OTP লিখুন।'
+        ? 'OTP SMS has been sent. Enter the OTP.'
         : otpStatus === 'rejected'
-          ? 'শেষ request reject হয়েছে। নতুন request পাঠান।'
+          ? 'Last request was rejected. Please request again.'
           : otpStatus === 'expired'
-            ? 'OTP expire হয়েছে। নতুন request পাঠান।'
+            ? 'OTP has expired. Please request a new one.'
             : otpStatus === 'verified'
-              ? 'এই OTP already used. নতুন vote-এর জন্য request দিন।'
-              : 'OTP request পাঠাতে Request OTP চাপুন।';
+              ? 'This OTP is already used. Request a new one for voting.'
+              : 'Tap Request OTP to send a new code.';
 
   return (
     <View style={styles.container}>
@@ -349,24 +349,27 @@ export const VotingScreen: React.FC = () => {
 
       <Modal visible={showOtpModal} animationType="fade" transparent onRequestClose={() => setShowOtpModal(false)}>
         <View style={styles.confirmOverlay}>
-          <View style={styles.confirmCard}>
-            <LinearGradient colors={Colors.gradients.warning} style={styles.confirmHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View style={styles.otpCard}>
+            <LinearGradient colors={Colors.gradients.warning} style={styles.otpHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
               <Text style={styles.confirmIcon}>📱</Text>
               <Text style={styles.confirmTitle}>OTP Verification</Text>
             </LinearGradient>
-            <View style={styles.confirmBody}>
-              <Text style={styles.confirmText}>অ্যাডমিন আপনার নম্বরে যে OTP পাঠিয়েছে, সেটা দিন।</Text>
+            <View style={styles.otpBody}>
+              <Text style={styles.confirmText}>Enter the OTP sent by the admin to your phone.</Text>
               <Text style={styles.otpStatusText}>{otpStatusText}</Text>
               <TextInput
                 style={styles.otpInput}
                 value={otpCode}
                 onChangeText={setOtpCode}
                 keyboardType="number-pad"
-                placeholder="6-digit OTP"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                importantForAutofill="yes"
+                placeholder=""
                 placeholderTextColor={Colors.textMuted}
-                maxLength={8}
+                maxLength={6}
               />
-              <View style={styles.confirmBtnRow}>
+              <View style={styles.otpBtnRow}>
                 <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => { setShowOtpModal(false); }} activeOpacity={0.85}>
                   <Text style={styles.confirmCancelText}>Cancel</Text>
                 </TouchableOpacity>
@@ -375,12 +378,12 @@ export const VotingScreen: React.FC = () => {
                     ? <ActivityIndicator color="#fff" />
                     : <Text style={styles.requestBtnText}>{otpStatus === 'pending' ? 'Request Again' : 'Request OTP'}</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.verifyBtn} onPress={handleVerifyOtp} activeOpacity={0.85} disabled={isVerifyingOtp || isSendingOtp}>
-                  {isVerifyingOtp || isSendingOtp
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.verifyBtnText}>Verify OTP</Text>}
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity style={styles.verifyBtn} onPress={handleVerifyOtp} activeOpacity={0.85} disabled={isVerifyingOtp || isSendingOtp}>
+                {isVerifyingOtp || isSendingOtp
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.verifyBtnText}>Verify OTP</Text>}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -428,20 +431,24 @@ const styles = StyleSheet.create({
 
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   confirmCard: { width: '100%', maxWidth: 430, backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  otpCard: { width: '100%', maxWidth: 430, backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
   confirmHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 20, gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.18)' },
+  otpHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 20, gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.18)' },
   confirmIcon: { fontSize: 26 },
   confirmTitle: { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
   confirmBody: { padding: 22, backgroundColor: '#f8f9ff' },
+  otpBody: { padding: 22, backgroundColor: '#f8f9ff' },
   confirmText: { fontSize: 16, lineHeight: 24, color: Colors.textPrimary, marginBottom: 18 },
   confirmCandidateName: { fontWeight: '900', color: Colors.textPrimary },
   confirmBtnRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
+  otpBtnRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 16 },
   confirmCancelBtn: { flex: 1, minWidth: 110, marginHorizontal: 0, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 5 },
   confirmCancelText: { fontSize: 15, fontWeight: '700', color: Colors.textSecondary },
   confirmYesBtn: { flex: 1, minWidth: 110, marginHorizontal: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.primary, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 8 },
   confirmYesText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  requestBtn: { flex: 1, minWidth: 110, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.gradients.ocean[0], borderColor: Colors.gradients.ocean[1], borderWidth: 0, shadowColor: Colors.gradients.ocean[0], shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
+  requestBtn: { flex: 1, minWidth: 110, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: '#3B82F6', borderColor: '#2563EB', borderWidth: 0, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
   requestBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  verifyBtn: { flex: 1, minWidth: 110, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.gradients.success[0], borderColor: Colors.gradients.success[1], borderWidth: 0, shadowColor: Colors.gradients.success[0], shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
+  verifyBtn: { width: '100%', borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 16, backgroundColor: '#10B981', borderColor: '#059669', borderWidth: 0, shadowColor: '#10B981', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 7 },
   verifyBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   otpInput: {
     borderWidth: 1,

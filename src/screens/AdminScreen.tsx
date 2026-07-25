@@ -677,7 +677,7 @@ export const AdminScreen: React.FC = () => {
       return;
     }
 
-    const body = `JOKSU Vote OTP: ${otpCode}. Eta 5 minute valid.`;
+    const body = `JOKSU Vote OTP: ${otpCode}. This code is valid for 5 minutes.`;
     const smsUrl = `sms:${trimmedPhone}?body=${encodeURIComponent(body)}`;
 
     try {
@@ -952,31 +952,6 @@ export const AdminScreen: React.FC = () => {
           </View>
 
           {/* Position-wise Results */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>পদভিত্তিক ফলাফল</Text>
-            {positions.map((position) => {
-              const positionCandidates = candidates.filter(c => c.position === position.id);
-              const totalVotes = positionCandidates.reduce((sum, c) => sum + c.votes, 0);
-              const leader = positionCandidates.sort((a, b) => b.votes - a.votes)[0];
-
-              return (
-                <View key={position.id} style={styles.positionSummary}>
-                  <View style={styles.positionSummaryHeader}>
-                    <Text style={styles.positionTitle}>{position.titleBn}</Text>
-                    <Text style={styles.positionStats}>
-                      {positionCandidates.length} জন • {totalVotes} ভোট
-                    </Text>
-                  </View>
-                  {leader && leader.votes > 0 && (
-                    <Text style={styles.leaderText}>
-                      🏆 {leader.name} ({leader.votes} ভোট)
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-
           {/* Admin Actions */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>দ্রুত অ্যাকশন</Text>
